@@ -13,7 +13,7 @@ const server = app.listen(8080, async () => {
     const t = startTest({
       files: {
         "/index.html": {
-          content: "foo<script async src='/script.js' data-interval='100'>",
+          content: `foo ${snippet()}`,
           lastModified: new Date(Date.UTC(2000, 0, 1, 0, 0)),
         },
       },
@@ -21,16 +21,16 @@ const server = app.listen(8080, async () => {
     await t.loaded;
 
     await delay(200);
+
     t.updateFiles({
       "/index.html": {
-        content: "bar",
+        content: `bar ${snippet()}`,
         lastModified: new Date(Date.UTC(2000, 0, 1, 0, 1)),
       },
     });
 
-    const { requests } = await t.result;
     assert(
-      requests.filter(
+      (await t.result).requests.filter(
         (req) => req.method === "GET" && req.url === "/index.html"
       ).length === 2
     );
@@ -41,7 +41,7 @@ const server = app.listen(8080, async () => {
       timeoutMs: 3100,
       files: {
         "/index.html": {
-          content: "foo<script async src='/script.js' data-interval='1000'>",
+          content: `foo ${snippet({ interval: 1000 })}`,
           lastModified: new Date(Date.UTC(2000, 0, 1, 0, 0)),
         },
       },
@@ -53,15 +53,14 @@ const server = app.listen(8080, async () => {
       await delay(100);
       t.updateFiles({
         "/index.html": {
-          content: "bar" + i,
+          content: `bar${i} ${snippet({ interval: 1000 })}`,
           lastModified: new Date(Date.UTC(2000, 0, 1, 0, i + 1)),
         },
       });
     }
 
-    const { requests } = await t.result;
     assert(
-      requests.filter(
+      (await t.result).requests.filter(
         (req) => req.method === "GET" && req.url === "/index.html"
       ).length === 2
     );
@@ -71,7 +70,7 @@ const server = app.listen(8080, async () => {
     const t = startTest({
       files: {
         "/index.html": {
-          content: "foo<script async src='/script.js' data-interval='100'>",
+          content: `foo ${snippet()}`,
           lastModified: new Date(Date.UTC(2000, 0, 1, 0, 0)),
         },
       },
@@ -79,23 +78,25 @@ const server = app.listen(8080, async () => {
     await t.loaded;
 
     await delay(200);
+
     t.updateFiles({
       "/index.html": {
-        content: "bar<script async src='/script.js' data-interval='100'>",
+        content: `bar ${snippet()}`,
         lastModified: new Date(Date.UTC(2000, 0, 1, 0, 1)),
       },
     });
+
     await delay(200);
+
     t.updateFiles({
       "/index.html": {
-        content: "baz<script async src='/script.js' data-interval='100'>",
+        content: `baz ${snippet()}`,
         lastModified: new Date(Date.UTC(2000, 0, 1, 0, 2)),
       },
     });
 
-    const { requests } = await t.result;
     assert(
-      requests.filter(
+      (await t.result).requests.filter(
         (req) => req.method === "GET" && req.url === "/index.html"
       ).length === 3
     );
@@ -105,8 +106,7 @@ const server = app.listen(8080, async () => {
     const t = startTest({
       files: {
         "/index.html": {
-          content:
-            "<link rel='stylesheet' href='/css.css'>css<script async src='/script.js' data-interval='100'>",
+          content: `<link rel='stylesheet' href='/css.css'> css ${snippet()}`,
         },
         "/css.css": {
           content: "* { color: red }",
@@ -117,6 +117,7 @@ const server = app.listen(8080, async () => {
     await t.loaded;
 
     await delay(200);
+
     t.updateFiles({
       "/css.css": {
         content: "* { color: blue }",
@@ -124,9 +125,8 @@ const server = app.listen(8080, async () => {
       },
     });
 
-    const { requests } = await t.result;
     assert(
-      requests.filter(
+      (await t.result).requests.filter(
         (req) => req.method === "GET" && req.url === "/index.html"
       ).length === 2
     );
@@ -136,8 +136,7 @@ const server = app.listen(8080, async () => {
     const t = startTest({
       files: {
         "/index.html": {
-          content:
-            "<link rel='stylesheet' href='/css.css'>css with url()<script async src='/script.js' data-interval='100'>",
+          content: `<link rel='stylesheet' href='/css.css'> css with url ${snippet()}`,
         },
         "/css.css": {
           content: "body { background-image: url('/image.bmp') }",
@@ -151,6 +150,7 @@ const server = app.listen(8080, async () => {
     await t.loaded;
 
     await delay(200);
+
     t.updateFiles({
       "/image.bmp": {
         content: fixtures.greenBMP,
@@ -158,9 +158,8 @@ const server = app.listen(8080, async () => {
       },
     });
 
-    const { requests } = await t.result;
     assert(
-      requests.filter(
+      (await t.result).requests.filter(
         (req) => req.method === "GET" && req.url === "/index.html"
       ).length === 2
     );
@@ -170,8 +169,7 @@ const server = app.listen(8080, async () => {
     const t = startTest({
       files: {
         "/index.html": {
-          content:
-            "<script async src='js.js'></script>script src<script async src='/script.js' data-interval='100'>",
+          content: `<script async src='js.js'></script> script src ${snippet()}`,
         },
         "/js.js": {
           content: "console.log(0)",
@@ -182,6 +180,7 @@ const server = app.listen(8080, async () => {
     await t.loaded;
 
     await delay(200);
+
     t.updateFiles({
       "/js.js": {
         content: "console.log(1)",
@@ -189,9 +188,8 @@ const server = app.listen(8080, async () => {
       },
     });
 
-    const { requests } = await t.result;
     assert(
-      requests.filter(
+      (await t.result).requests.filter(
         (req) => req.method === "GET" && req.url === "/index.html"
       ).length === 2
     );
@@ -201,8 +199,7 @@ const server = app.listen(8080, async () => {
     const t = startTest({
       files: {
         "/index.html": {
-          content:
-            "<script type='module' src='main.js'></script>script module src<script async src='/script.js' data-interval='100'>",
+          content: `<script type='module' src='main.js'></script> script module src ${snippet()}`,
         },
         "/main.js": {
           content: "import('/sub.js')",
@@ -216,6 +213,7 @@ const server = app.listen(8080, async () => {
     await t.loaded;
 
     await delay(200);
+
     t.updateFiles({
       "/sub.js": {
         content: "console.log(1)",
@@ -223,9 +221,8 @@ const server = app.listen(8080, async () => {
       },
     });
 
-    const { requests } = await t.result;
     assert(
-      requests.filter(
+      (await t.result).requests.filter(
         (req) => req.method === "GET" && req.url === "/index.html"
       ).length === 2
     );
@@ -235,6 +232,10 @@ const server = app.listen(8080, async () => {
   server.close();
   server.closeAllConnections();
 });
+
+function snippet({ interval = 100 } = {}) {
+  return `<script async src='/script.js' data-interval='${interval}'>`;
+}
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));

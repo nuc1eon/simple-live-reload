@@ -23,6 +23,7 @@ module.exports.createTest = function createTest() {
 
   function report() {
     console.log(`${passed}/${total} tests passed`);
+    return total === passed;
   }
 
   return {

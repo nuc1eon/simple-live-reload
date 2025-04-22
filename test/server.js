@@ -1,11 +1,7 @@
-const http = require("http");
-const fs = require("fs");
+const express = require("express");
 const path = require("path");
 
 const staticFiles = {
-  "/script.js": {
-    content: fs.readFileSync(path.join(__dirname, "../script.js")),
-  },
   "/index.html": {
     content:
       'Test server idle<script>setTimeout(()=>location="/index.html",1000)</script>',
@@ -21,35 +17,57 @@ const contentTypes = {
 };
 
 module.exports.createTestServer = function createTestServer() {
+  const app = express();
+
   let test = null;
 
-  function startTest({
-    timeoutMs = 400,
-    liveReloadIntervalMs = 100,
-    files = {},
-  }) {
-    test = { timeoutMs, liveReloadIntervalMs, files, requests: [] };
+  function startTest({ timeoutMs = 400, files = {} }) {
+    test = { timeoutMs, files, requests: [] };
+
     test.loaded = new Promise((resolve) => {
       test.onload = resolve;
     });
+
     test.result = new Promise((resolve) => {
       test.resolve = resolve;
     });
-    test.updateFiles = updateFiles;
-    test.endTest = endTest;
+
+    test.updateFiles = (files) => {
+      Object.assign(test.files, files);
+    };
+
+    test.end = () => {
+      test.resolve(test);
+      test = null;
+    };
+
     return test;
   }
 
-  function updateFiles(files) {
-    Object.assign(test.files, files);
-  }
+  app.get("/start", async (req, res) => {
+    if (!test) {
+      await delay(2000);
+      res.status(200).send(staticFiles["/index.html"].content);
+    } else {
+      res.status(400).end();
+    }
+  });
 
-  function endTest() {
-    test.resolve(test);
-    test = null;
-  }
+  app.get("/end", (req, res) => {
+    if (test) {
+      clearTimeout(test.timeout);
+      test.end();
+      res.status(200).send(staticFiles["/index.html"].content);
+    } else {
+      res.status(400).end();
+    }
+  });
 
-  const server = http.createServer(async (req, res) => {
+  app.get("/script.js", (req, res) => {
+    res.sendFile(path.join(__dirname, "../script.js"));
+  });
+
+  app.all("*_", (req, res) => {
     const time = Date.now();
     test?.requests.push({
       method: req.method,
@@ -58,63 +76,37 @@ module.exports.createTestServer = function createTestServer() {
       relTime: test.requests.length ? time - test.requests[0].time : 0,
     });
 
-    res.setHeader("Cache-Control", "no-store, no-cache");
-
-    if (!test && req.url === "/start") {
-      await delay(2000);
-      res.writeHead(200, { "Content-Type": "text/html" });
-      res.end(staticFiles["/index.html"].content);
-      return;
-    }
-
-    if (test && req.url === "/end") {
-      if (test.timeout != null) clearTimeout(test.timeout);
-      endTest();
-      res.writeHead(200, { "Content-Type": "text/html" });
-      res.end(staticFiles["/index.html"].content);
-      return;
-    }
-
+    res.header("Cache-Control", "no-store, no-cache");
     const file = test?.files[req.url] ?? staticFiles[req.url];
     if (!file) {
-      res.writeHead(404, { "Content-Type": "text/plain" });
-      res.end("Not Found");
+      res.status(404).end();
       return;
     }
 
     let content = file.content;
     if (test && req.method === "GET" && req.url === "/index.html") {
-      if (test.timeout != null) clearTimeout(test.timeout);
-      test.timeout = setTimeout(endTest, test.timeoutMs + 5000);
+      clearTimeout(test.timeout);
+      test.timeout = setTimeout(test.end, test.timeoutMs + 5000);
       content =
         String(content) +
-        `<script async src="/script.js" data-interval="${test.liveReloadIntervalMs}"></script><script>setTimeout(()=>{location="/end"},${test.timeoutMs})</script>`;
+        `</script><script>setTimeout(()=>{location="/end"},${test.timeoutMs})</script>`;
       test.onload();
     }
 
-    res.setHeader(
+    res.header(
       "Content-Type",
       contentTypes[path.extname(req.url)] ?? "application/octet-stream"
     );
 
     if (file.lastModified) {
-      res.setHeader("Last-Modified", file.lastModified.toUTCString());
+      res.header("Last-Modified", file.lastModified.toUTCString());
     }
 
-    if (req.method === "HEAD") {
-      res.writeHead(200);
-      res.end();
-    } else if (req.method === "GET") {
-      res.writeHead(200);
-      res.end(content);
-    } else {
-      res.writeHead(405, { Allow: "GET, HEAD" });
-      res.end("405 Method Not Allowed");
-    }
+    res.status(200).send(content);
   });
 
   return {
-    server,
+    app,
     startTest,
   };
 };

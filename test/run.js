@@ -4,8 +4,8 @@ const { createTestServer } = require("./server.js");
 const fixtures = require("./fixtures.js");
 
 const { test, assert, report } = createTest();
-const { server, startTest } = createTestServer();
-server.listen(8080, async () => {
+const { app, startTest } = createTestServer();
+const server = app.listen(8080, async () => {
   spawn("chromium", ["http://localhost:8080/start"], { shell: true });
   await delay(1000);
 
@@ -13,7 +13,7 @@ server.listen(8080, async () => {
     const t = startTest({
       files: {
         "/index.html": {
-          content: "foo",
+          content: "foo<script async src='/script.js' data-interval='100'>",
           lastModified: new Date(Date.UTC(2000, 0, 1, 0, 0)),
         },
       },
@@ -36,11 +36,42 @@ server.listen(8080, async () => {
     );
   });
 
+  await test("reloads page at the specified frequency", async () => {
+    const t = startTest({
+      timeoutMs: 3100,
+      files: {
+        "/index.html": {
+          content: "foo<script async src='/script.js' data-interval='1000'>",
+          lastModified: new Date(Date.UTC(2000, 0, 1, 0, 0)),
+        },
+      },
+    });
+    await t.loaded;
+    await delay(1000); // wait for first HEAD
+
+    for (let i = 0; i < 5; i++) {
+      await delay(100);
+      t.updateFiles({
+        "/index.html": {
+          content: "bar" + i,
+          lastModified: new Date(Date.UTC(2000, 0, 1, 0, i + 1)),
+        },
+      });
+    }
+
+    const { requests } = await t.result;
+    assert(
+      requests.filter(
+        (req) => req.method === "GET" && req.url === "/index.html"
+      ).length === 2
+    );
+  });
+
   await test("reloads page when page is updated more than once", async () => {
     const t = startTest({
       files: {
         "/index.html": {
-          content: "foo",
+          content: "foo<script async src='/script.js' data-interval='100'>",
           lastModified: new Date(Date.UTC(2000, 0, 1, 0, 0)),
         },
       },
@@ -50,14 +81,14 @@ server.listen(8080, async () => {
     await delay(200);
     t.updateFiles({
       "/index.html": {
-        content: "bar",
+        content: "bar<script async src='/script.js' data-interval='100'>",
         lastModified: new Date(Date.UTC(2000, 0, 1, 0, 1)),
       },
     });
     await delay(200);
     t.updateFiles({
       "/index.html": {
-        content: "baz",
+        content: "baz<script async src='/script.js' data-interval='100'>",
         lastModified: new Date(Date.UTC(2000, 0, 1, 0, 2)),
       },
     });
@@ -74,7 +105,8 @@ server.listen(8080, async () => {
     const t = startTest({
       files: {
         "/index.html": {
-          content: "<link rel='stylesheet' href='/css.css'>css",
+          content:
+            "<link rel='stylesheet' href='/css.css'>css<script async src='/script.js' data-interval='100'>",
         },
         "/css.css": {
           content: "* { color: red }",
@@ -104,7 +136,8 @@ server.listen(8080, async () => {
     const t = startTest({
       files: {
         "/index.html": {
-          content: "<link rel='stylesheet' href='/css.css'>css with url()",
+          content:
+            "<link rel='stylesheet' href='/css.css'>css with url()<script async src='/script.js' data-interval='100'>",
         },
         "/css.css": {
           content: "body { background-image: url('/image.bmp') }",
@@ -137,7 +170,8 @@ server.listen(8080, async () => {
     const t = startTest({
       files: {
         "/index.html": {
-          content: "<script async src='js.js'></script>script src",
+          content:
+            "<script async src='js.js'></script>script src<script async src='/script.js' data-interval='100'>",
         },
         "/js.js": {
           content: "console.log(0)",
@@ -167,7 +201,8 @@ server.listen(8080, async () => {
     const t = startTest({
       files: {
         "/index.html": {
-          content: "<script type='module' src='main.js'></script>script module src",
+          content:
+            "<script type='module' src='main.js'></script>script module src<script async src='/script.js' data-interval='100'>",
         },
         "/main.js": {
           content: "import('/sub.js')",
@@ -196,7 +231,7 @@ server.listen(8080, async () => {
     );
   });
 
-  report();
+  process.exitCode = report() ? 0 : 1;
   server.close();
   server.closeAllConnections();
 });

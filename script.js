@@ -31,14 +31,14 @@ if (
     const url = new URL(urlString);
     if (url.origin !== location.origin) return;
 
-    if (watching.has(url.pathname)) return;
-    watching.add(url.pathname);
+    if (watching.has(url.href)) return;
+    watching.add(url.href);
 
     if (debug) {
-      console.log("[simple-live-reload] watching", url.pathname);
+      console.log("[simple-live-reload] watching", url.href);
     }
 
-    let lastModified, etag;
+    let etag, lastModified, contentLength;
     let request = { method: "head", cache: "no-store" };
 
     async function check() {
@@ -53,13 +53,18 @@ if (
         return check();
       }
 
-      const newLastModified = res.headers.get("Last-Modified");
       const newETag = res.headers.get("ETag");
+      const newLastModified = res.headers.get("Last-Modified");
+      const newContentLength = res.headers.get("Content-Length");
 
       if (
-        (lastModified != null || etag != null) &&
-        (lastModified != newLastModified || etag != newETag)
+        (etag && etag !== newETag) ||
+        (lastModified && lastModified !== newLastModified) ||
+        (contentLength && contentLength !== newContentLength)
       ) {
+        if (debug) {
+          console.log("[simple-live-reload] change detected in", url.href);
+        }
         try {
           location.reload();
         } catch (e) {
@@ -67,8 +72,9 @@ if (
         }
       }
 
-      lastModified = newLastModified;
       etag = newETag;
+      lastModified = newLastModified;
+      contentLength = newContentLength;
     }
 
     check();

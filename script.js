@@ -39,15 +39,19 @@ if (
     }
 
     let lastModified, etag;
-    let method = "head";
+    let request = { method: "head", cache: "no-store" };
 
     async function check() {
-      const res = await fetch(url, { method });
+      const res = await fetch(url, request);
       if (
+        request.method !== "get" ||
         res.status === /*Method Not Allowed*/ 405 ||
         res.status === /*Not Implemented*/ 501
       ) {
-        method = "get";
+        request.method = "get";
+        request.headers = {
+          Range: "bytes=0-0",
+        };
         return check();
       }
 

@@ -4,7 +4,7 @@ const path = require("path");
 const staticFiles = {
   "/index.html": {
     content:
-      'Test server idle<script>setTimeout(()=>location="/index.html",1000)</script>',
+      '<i>test server idle</i><script>setTimeout(()=>location="/index.html",1000)</script>',
   },
 };
 
@@ -19,9 +19,15 @@ const contentTypes = {
 module.exports.createTestServer = function createTestServer() {
   const app = express();
 
+  let restRoute;
+  initBaseRoutes();
+  resetRestRoute();
+
   let test = null;
 
   function startTest({ timeoutMs = 400, files = {} }) {
+    resetRestRoute();
+
     test = { timeoutMs, files, requests: [] };
 
     test.loaded = new Promise((resolve) => {
@@ -44,66 +50,77 @@ module.exports.createTestServer = function createTestServer() {
     return test;
   }
 
-  app.get("/start", async (req, res) => {
-    if (!test) {
-      await delay(2000);
-      res.status(200).send(staticFiles["/index.html"].content);
-    } else {
-      res.status(400).end();
-    }
-  });
-
-  app.get("/end", (req, res) => {
-    if (test) {
-      clearTimeout(test.timeout);
-      test.end();
-      res.status(200).send(staticFiles["/index.html"].content);
-    } else {
-      res.status(400).end();
-    }
-  });
-
-  app.get("/script.js", (req, res) => {
-    res.sendFile(path.join(__dirname, "../script.js"));
-  });
-
-  app.all("*_", (req, res) => {
-    const time = Date.now();
-    test?.requests.push({
-      method: req.method,
-      url: req.url,
-      time: time,
-      relTime: test.requests.length ? time - test.requests[0].time : 0,
+  function initBaseRoutes() {
+    app.get("/start", async (req, res) => {
+      if (!test) {
+        await delay(2000);
+        res.status(200).send(staticFiles["/index.html"].content);
+      } else {
+        res.status(400).end();
+      }
     });
 
-    res.header("Cache-Control", "no-store, no-cache");
-    const file = test?.files[req.url] ?? staticFiles[req.url];
-    if (!file) {
-      res.status(404).end();
-      return;
+    app.get("/end", (req, res) => {
+      if (test) {
+        clearTimeout(test.timeout);
+        test.end();
+        res.status(200).send(staticFiles["/index.html"].content);
+      } else {
+        res.status(400).end();
+      }
+    });
+
+    app.get("/script.js", (req, res) => {
+      res.sendFile(path.join(__dirname, "../script.js"));
+    });
+  }
+
+  function resetRestRoute() {
+    if (restRoute) {
+      app.router.stack.splice(
+        app.router.stack.findIndex((layer) => layer.route === restRoute),
+        1
+      );
     }
+    restRoute = app.route("*_");
+    restRoute.all((req, res) => {
+      const time = Date.now();
+      test?.requests.push({
+        method: req.method,
+        url: req.url,
+        time: time,
+        relTime: test.requests.length ? time - test.requests[0].time : 0,
+      });
 
-    let content = file.content;
-    if (test && req.method === "GET" && req.url === "/index.html") {
-      clearTimeout(test.timeout);
-      test.timeout = setTimeout(test.end, test.timeoutMs + 5000);
-      content =
-        String(content) +
-        `</script><script>setTimeout(()=>{location="/end"},${test.timeoutMs})</script>`;
-      test.onload();
-    }
+      res.header("Cache-Control", "no-store, no-cache");
+      const file = test?.files[req.url] ?? staticFiles[req.url];
+      if (!file) {
+        res.status(404).end();
+        return;
+      }
 
-    res.header(
-      "Content-Type",
-      contentTypes[path.extname(req.url)] ?? "application/octet-stream"
-    );
+      let content = file.content;
+      if (test && req.method === "GET" && req.url === "/index.html") {
+        clearTimeout(test.timeout);
+        test.timeout = setTimeout(test.end, test.timeoutMs + 5000);
+        content =
+          String(content) +
+          `</script><script>setTimeout(()=>{location="/end"},${test.timeoutMs})</script>`;
+        test.onload();
+      }
 
-    if (file.lastModified) {
-      res.header("Last-Modified", file.lastModified.toUTCString());
-    }
+      res.header(
+        "Content-Type",
+        contentTypes[path.extname(req.url)] ?? "application/octet-stream"
+      );
 
-    res.status(200).send(content);
-  });
+      if (file.lastModified) {
+        res.header("Last-Modified", file.lastModified.toUTCString());
+      }
+
+      res.status(200).send(content);
+    });
+  }
 
   return {
     app,

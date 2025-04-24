@@ -12,6 +12,8 @@ module.exports.createTest = function createTest() {
     }
   }
 
+  test.skip = () => {};
+
   function assert(condition) {
     total++;
     if (condition) {

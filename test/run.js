@@ -2,11 +2,17 @@ const { spawn } = require("node:child_process");
 const { createTest } = require("./base.js");
 const { createTestServer } = require("./server.js");
 const fixtures = require("./fixtures.js");
+const { mkdtemp } = require("node:fs/promises");
 
 const { test, assert, report } = createTest();
 const { app, startTest } = createTestServer();
 const server = app.listen(8080, async () => {
-  spawn("chromium", ["http://localhost:8080/start"], { shell: true });
+  const chromiumUserDir = await mkdtemp("/tmp/slrtest");
+  const chromium = spawn(
+    "chromium",
+    [`--user-data-dir=${chromiumUserDir}`, "http://localhost:8080/start"],
+    { shell: true }
+  );
   await delay(1000);
 
   await test("reloads page when HTML is updated", async () => {
@@ -229,6 +235,7 @@ const server = app.listen(8080, async () => {
   });
 
   process.exitCode = report() ? 0 : 1;
+  // chromium.kill();
   server.close();
   server.closeAllConnections();
 });

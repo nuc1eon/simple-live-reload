@@ -42,6 +42,8 @@ if (
     let request = { method: "head", cache: "no-store" };
 
     async function check() {
+      if (document.hidden) return;
+
       const res = await fetch(url, request);
       if (
         res.status === /*Method Not Allowed*/ 405 ||
@@ -74,5 +76,9 @@ if (
 
     check();
     setInterval(check, interval);
+    document.addEventListener(
+      "visibilitychange",
+      () => !document.hidden && check()
+    );
   }
 }

@@ -1,6 +1,6 @@
-const { createTest } = require("./base.js");
-const { createTestServer } = require("./server.js");
-const fixtures = require("./fixtures.js");
+const { createTest } = require("./util/base.js");
+const { createTestServer } = require("./util/server.js");
+const fixtures = require("./util/fixtures.js");
 
 const { test, assert, report } = createTest();
 const { withClientServer, startTest } = createTestServer();

@@ -45,10 +45,7 @@ if (
       if (document.hidden) return;
 
       const res = await fetch(url, request);
-      if (
-        res.status === /*Method Not Allowed*/ 405 ||
-        res.status === /*Not Implemented*/ 501
-      ) {
+      if (res.status === 405 || res.status === 501) {
         request.method = "get";
         request.headers = {
           Range: "bytes=0-0",

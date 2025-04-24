@@ -10,12 +10,12 @@ A lightweight JavaScript helper for automatically reloading the page when change
    <script
      src="https://kalabasa.github.io/simple-live-reload/script.js"
      data-interval="1000"
-     data-debug="true"
+     data-debug
    ></script>
    ```
 
    - `data-interval` (optional): The interval time in milliseconds for polling resource status (default: `1000` ms).
-   - `data-debug` (optional): Set to `true` to enable debug logging to the console (default: `false`).
+   - `data-debug` (optional): Set to enable debug logging to the console.
 
 2. Use your favourite local HTTP server, I don’t care.
 

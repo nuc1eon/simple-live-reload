@@ -1,17 +1,12 @@
+const { mkdtemp } = require("node:fs/promises");
+const { spawn } = require("node:child_process");
 const express = require("express");
 const path = require("path");
-
-const staticFiles = {
-  "/index.html": {
-    content:
-      '<i>test server idle</i><script>setTimeout(()=>location="/index.html",1000)</script>',
-  },
-};
 
 const contentTypes = {
   ".html": "text/html",
   ".css": "text/css",
-  ".js": "application/javascript",
+  ".js": "text/javascript",
   ".json": "application/json",
   ".bmp": "image/bmp",
 };
@@ -19,115 +14,130 @@ const contentTypes = {
 module.exports.createTestServer = function createTestServer() {
   const app = express();
 
-  let restRoute;
-  initBaseRoutes();
-  resetRestRoute();
+  const idleContent =
+    '<i>test server idle</i><meta http-equiv="refresh" content="1;url=/index.html">';
 
-  let test = null;
+  addBaseRoutes(app, () => {});
+  addFinalRoute(app, () => {});
 
-  function startTest({ timeoutMs = 1000, files = {} }) {
-    resetRestRoute();
+  async function startTest(timeoutSec, callback) {
+    app.router.stack.length = 0;
 
-    test = { timeoutMs, files, requests: [] };
+    const { requests, requestLogger } = createRequestLogger();
+    app.use(requestLogger);
 
-    test.loaded = new Promise((resolve) => {
-      test.onload = resolve;
-    });
+    const start = promiseWithResolvers();
+    const end = promiseWithResolvers();
 
-    test.result = new Promise((resolve) => {
-      test.resolve = resolve;
-    });
+    app.use(createTestWrapper(timeoutSec, start.resolve));
 
-    test.updateFiles = (files) => {
-      Object.assign(test.files, files);
+    addBaseRoutes(app, end.resolve);
+    callback(app); // test logic is like a big middleware
+    addFinalRoute(app);
+
+    const collectRequests = async () => {
+      await end.promise;
+      return requests;
     };
 
-    test.end = () => {
-      test.resolve(test);
-      test = null;
-    };
-
-    return test;
+    await start.promise;
+    return { collectRequests };
   }
 
-  function initBaseRoutes() {
-    app.get("/start", async (req, res) => {
-      if (!test) {
-        await delay(2000);
-        res.status(200).send(staticFiles["/index.html"].content);
-      } else {
-        res.status(400).end();
-      }
-    });
-
+  function addBaseRoutes(app, onEnd) {
     app.get("/end", (req, res) => {
-      if (test) {
-        clearTimeout(test.timeout);
-        test.end();
-        res.status(200).send(staticFiles["/index.html"].content);
-      } else {
-        res.status(400).end();
-      }
+      res.status(200).header("Content-Type", "text/html").end(idleContent);
+      onEnd();
     });
-
     app.get("/script.js", (req, res) => {
       res.sendFile(path.join(__dirname, "../script.js"));
     });
   }
 
-  function resetRestRoute() {
-    if (restRoute) {
-      app.router.stack.splice(
-        app.router.stack.findIndex((layer) => layer.route === restRoute),
-        1
-      );
-    }
-    restRoute = app.route("*_");
-    restRoute.all((req, res) => {
-      const time = Date.now();
-      test?.requests.push({
-        method: req.method,
-        url: req.url,
-        secFetchDest: req.header("sec-fetch-dest"),
-        time: time,
-        relTime: test.requests.length ? time - test.requests[0].time : 0,
-      });
-
-      res.header("Cache-Control", "no-store, no-cache");
-      const file = test?.files[req.url] ?? staticFiles[req.url];
-      if (!file) {
+  function addFinalRoute(app) {
+    app.all("*_", (req, res) => {
+      if (req.url !== "/index.html") {
         res.status(404).end();
         return;
       }
+      res.status(200).header("Content-Type", "text/html").end(idleContent);
+    });
+  }
 
-      let content = file.content;
-      if (test && req.method === "GET" && req.url === "/index.html") {
-        clearTimeout(test.timeout);
-        test.timeout = setTimeout(test.end, test.timeoutMs + 5000);
-        content =
-          String(content) +
-          `</script><script>setTimeout(()=>{location="/end"},${test.timeoutMs})</script>`;
-        test.onload();
-      }
-
+  function createTestWrapper(timeoutSec, onStart) {
+    return (req, res, next) => {
+      res.header("Cache-Control", "no-store, no-cache");
       res.header(
         "Content-Type",
-        contentTypes[path.extname(req.url)] ?? "application/octet-stream"
+        contentTypes[path.extname(req.url)] ?? "text/plain"
       );
 
-      if (file.lastModified) {
-        res.header("Last-Modified", file.lastModified.toUTCString());
+      if (req.method === "GET" && req.url === "/index.html") {
+        res.header("Refresh", `${timeoutSec}, url=/end`);
+        onStart();
       }
 
-      res.status(200).send(content);
+      next();
+    };
+  }
+
+  function createRequestLogger() {
+    const requests = [];
+
+    function requestLogger(req, res, next) {
+      const time = Date.now();
+      requests.push({
+        method: req.method,
+        url: req.url,
+        destination: req.header("sec-fetch-dest"),
+        time: time,
+        relTime: requests.length ? time - requests[0].time : 0,
+      });
+      next();
+    }
+
+    return { requests, requestLogger };
+  }
+
+  function withClientServer(callback) {
+    const server = app.listen(8080, async () => {
+      const chromiumUserDir = await mkdtemp("/tmp/slrtest");
+      const chromium = spawn(
+        "chromium",
+        [
+          `--user-data-dir=${chromiumUserDir}`,
+          "http://localhost:8080/index.html",
+        ],
+        { shell: true }
+      );
+      await delay(3000); // wait for browser program to open
+      const success = await callback();
+      if (success) {
+        chromium.kill();
+        server.close();
+        server.closeAllConnections();
+      }
     });
   }
 
   return {
-    app,
+    withClientServer,
     startTest,
   };
 };
+
+function promiseWithResolvers() {
+  let resolve;
+  let reject;
+  return {
+    promise: new Promise((res, rej) => {
+      resolve = res;
+      reject = rej;
+    }),
+    resolve,
+    reject,
+  };
+}
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));

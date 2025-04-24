@@ -1,295 +1,313 @@
-const { spawn } = require("node:child_process");
 const { createTest } = require("./base.js");
 const { createTestServer } = require("./server.js");
 const fixtures = require("./fixtures.js");
-const { mkdtemp } = require("node:fs/promises");
 
 const { test, assert, report } = createTest();
-const { app, startTest } = createTestServer();
-const server = app.listen(8080, async () => {
-  const chromiumUserDir = await mkdtemp("/tmp/slrtest");
-  const chromium = spawn(
-    "chromium",
-    [`--user-data-dir=${chromiumUserDir}`, "http://localhost:8080/start"],
-    { shell: true }
-  );
-  await delay(3000); // allow me to open devtools
+const { withClientServer, startTest } = createTestServer();
 
+withClientServer(async () => {
   test("reloads page when HTML is updated", async () => {
-    const t = startTest({
-      files: {
-        "/index.html": {
-          content: `foo ${snippet()}`,
-          lastModified: new Date(Date.UTC(2000, 0, 1, 0, 0)),
-        },
-      },
+    let time = 0;
+    let indexHTML = `foo ${snippet()}`;
+
+    const { collectRequests } = await startTest(1, (app) => {
+      ["get", "head"].forEach((method) => {
+        app[method]("/index.html", (req, res) => {
+          res
+            .status(200)
+            .header(...lastModifiedHeader(time))
+            .end(method === "get" ? indexHTML : undefined);
+        });
+      });
     });
-    await t.loaded;
 
     await delay(200);
+    time = 1;
+    indexHTML = `bar ${snippet()}`;
 
-    t.updateFiles({
-      "/index.html": {
-        content: `bar ${snippet()}`,
-        lastModified: new Date(Date.UTC(2000, 0, 1, 0, 1)),
-      },
-    });
-
+    const requests = await collectRequests();
     assert(
-      (await t.result).requests.filter(
-        (req) => req.method === "GET" && req.url === "/index.html"
+      requests.filter(
+        (req) =>
+          req.method === "GET" &&
+          req.destination === "document" &&
+          req.url === "/index.html"
       ).length === 2
     );
   });
 
   test("reloads page at the specified frequency", async () => {
-    const t = startTest({
-      timeoutMs: 3100,
-      files: {
-        "/index.html": {
-          content: `foo ${snippet({ interval: 1000 })}`,
-          lastModified: new Date(Date.UTC(2000, 0, 1, 0, 0)),
-        },
-      },
+    let time = 0;
+    let content = `foo ${snippet({ interval: 1000 })}`;
+
+    const { collectRequests } = await startTest(5, (app) => {
+      ["get", "head"].forEach((method) => {
+        app[method]("/index.html", (req, res) => {
+          res
+            .status(200)
+            .header(...lastModifiedHeader(time))
+            .end(method === "get" ? content : undefined);
+        });
+      });
     });
-    await t.loaded;
-    await delay(1000); // wait for first HEAD
 
     for (let i = 0; i < 5; i++) {
       await delay(100);
-      t.updateFiles({
-        "/index.html": {
-          content: `bar${i} ${snippet({ interval: 1000 })}`,
-          lastModified: new Date(Date.UTC(2000, 0, 1, 0, i + 1)),
-        },
-      });
+      time = i + 1;
+      content = `bar${i} ${snippet({ interval: 1000 })}`;
     }
 
+    const requests = await collectRequests();
     assert(
-      (await t.result).requests.filter(
-        (req) => req.method === "GET" && req.url === "/index.html"
+      requests.filter(
+        (req) =>
+          req.method === "GET" &&
+          req.destination === "document" &&
+          req.url === "/index.html"
       ).length === 2
     );
   });
 
   test("reloads page when page is updated more than once", async () => {
-    const t = startTest({
-      files: {
-        "/index.html": {
-          content: `foo ${snippet()}`,
-          lastModified: new Date(Date.UTC(2000, 0, 1, 0, 0)),
-        },
-      },
-    });
-    await t.loaded;
+    let time = 0;
+    let content = `foo ${snippet()}`;
 
-    await delay(200);
-
-    t.updateFiles({
-      "/index.html": {
-        content: `bar ${snippet()}`,
-        lastModified: new Date(Date.UTC(2000, 0, 1, 0, 1)),
-      },
+    const { collectRequests } = await startTest(1, (app) => {
+      ["get", "head"].forEach((method) => {
+        app[method]("/index.html", (req, res) => {
+          res
+            .status(200)
+            .header(...lastModifiedHeader(time))
+            .end(method === "get" ? content : undefined);
+        });
+      });
     });
 
     await delay(200);
+    time = 1;
+    content = `bar ${snippet()}`;
 
-    t.updateFiles({
-      "/index.html": {
-        content: `baz ${snippet()}`,
-        lastModified: new Date(Date.UTC(2000, 0, 1, 0, 2)),
-      },
-    });
+    await delay(200);
+    time = 2;
+    content = `baz ${snippet()}`;
 
+    const requests = await collectRequests();
     assert(
-      (await t.result).requests.filter(
-        (req) => req.method === "GET" && req.url === "/index.html"
+      requests.filter(
+        (req) =>
+          req.method === "GET" &&
+          req.destination === "document" &&
+          req.url === "/index.html"
       ).length === 3
     );
   });
 
   test("reloads page when a CSS resource is updated", async () => {
-    const t = startTest({
-      files: {
-        "/index.html": {
-          content: `<link rel='stylesheet' href='/css.css'> css ${snippet()}`,
-        },
-        "/css.css": {
-          content: "* { color: red }",
-          lastModified: new Date(Date.UTC(2000, 0, 1, 0, 0)),
-        },
-      },
+    let time = 0;
+    let cssContent = "* { color: red }";
+
+    const { collectRequests } = await startTest(1, (app) => {
+      app.get("/index.html", (req, res) => {
+        res
+          .status(200)
+          .end(`<link rel='stylesheet' href='/css.css'> css ${snippet()}`);
+      });
+
+      ["get", "head"].forEach((method) => {
+        app[method]("/css.css", (req, res) => {
+          res
+            .status(200)
+            .header(...lastModifiedHeader(time))
+            .end(method === "get" ? cssContent : undefined);
+        });
+      });
     });
-    await t.loaded;
 
     await delay(200);
+    time = 1;
+    cssContent = "* { color: blue }";
 
-    t.updateFiles({
-      "/css.css": {
-        content: "* { color: blue }",
-        lastModified: new Date(Date.UTC(2000, 0, 1, 0, 1)),
-      },
-    });
-
+    const requests = await collectRequests();
     assert(
-      (await t.result).requests.filter(
-        (req) => req.method === "GET" && req.url === "/index.html"
+      requests.filter(
+        (req) =>
+          req.method === "GET" &&
+          req.destination === "document" &&
+          req.url === "/index.html"
       ).length === 2
     );
   });
 
   test("reloads page when a CSS background-image is updated", async () => {
-    const t = startTest({
-      files: {
-        "/index.html": {
-          content: `<link rel='stylesheet' href='/css.css'> css with url ${snippet()}`,
-        },
-        "/css.css": {
-          content: "body { background-image: url('/image.bmp') }",
-        },
-        "/image.bmp": {
-          content: fixtures.yellowBMP,
-          lastModified: new Date(Date.UTC(2000, 0, 1, 0, 0)),
-        },
-      },
+    let time = 0;
+    let imageContent = fixtures.yellowBMP;
+
+    const { collectRequests } = await startTest(1, (app) => {
+      app.get("/index.html", (req, res) => {
+        res
+          .status(200)
+          .end(
+            `<link rel='stylesheet' href='/css.css'> css with url ${snippet()}`
+          );
+      });
+
+      app.get("/css.css", (req, res) => {
+        res.status(200).end(`body { background-image: url('/image.bmp') }`);
+      });
+
+      ["get", "head"].forEach((method) => {
+        app[method]("/image.bmp", (req, res) => {
+          res
+            .status(200)
+            .header(...lastModifiedHeader(time))
+            .end(method === "get" ? imageContent : undefined);
+        });
+      });
     });
-    await t.loaded;
 
     await delay(200);
+    time = 1;
+    imageContent = fixtures.greenBMP;
 
-    t.updateFiles({
-      "/image.bmp": {
-        content: fixtures.greenBMP,
-        lastModified: new Date(Date.UTC(2000, 0, 1, 0, 1)),
-      },
-    });
-
+    const requests = await collectRequests();
     assert(
-      (await t.result).requests.filter(
-        (req) => req.method === "GET" && req.url === "/index.html"
+      requests.filter(
+        (req) =>
+          req.method === "GET" &&
+          req.destination === "document" &&
+          req.url === "/index.html"
       ).length === 2
     );
   });
 
   test("reloads page when a JS resource is updated", async () => {
-    const t = startTest({
-      files: {
-        "/index.html": {
-          content: `<script async src='js.js'></script> script src ${snippet()}`,
-        },
-        "/js.js": {
-          content: "console.log(0)",
-          lastModified: new Date(Date.UTC(2000, 0, 1, 0, 0)),
-        },
-      },
+    let time = 0;
+    let jsContent = "console.log(0)";
+
+    const { collectRequests } = await startTest(1, (app) => {
+      app.get("/index.html", (req, res) => {
+        res
+          .status(200)
+          .end(`<script async src='/js.js'></script> script src ${snippet()}`);
+      });
+
+      ["get", "head"].forEach((method) => {
+        app[method]("/js.js", (req, res) => {
+          res
+            .status(200)
+            .header(...lastModifiedHeader(time))
+            .end(method === "get" ? jsContent : undefined);
+        });
+      });
     });
-    await t.loaded;
 
     await delay(200);
+    time = 1;
+    jsContent = "console.log(1)";
 
-    t.updateFiles({
-      "/js.js": {
-        content: "console.log(1)",
-        lastModified: new Date(Date.UTC(2000, 0, 1, 0, 1)),
-      },
-    });
-
+    const requests = await collectRequests();
     assert(
-      (await t.result).requests.filter(
-        (req) => req.method === "GET" && req.url === "/index.html"
+      requests.filter(
+        (req) =>
+          req.method === "GET" &&
+          req.destination === "document" &&
+          req.url === "/index.html"
       ).length === 2
     );
   });
 
   test("reloads page when a JS sub-import is updated", async () => {
-    const t = startTest({
-      files: {
-        "/index.html": {
-          content: `<script type='module' src='main.js'></script> script module src ${snippet()}`,
-        },
-        "/main.js": {
-          content: "import('/sub.js')",
-        },
-        "/sub.js": {
-          content: "console.log(0)",
-          lastModified: new Date(Date.UTC(2000, 0, 1, 0, 0)),
-        },
-      },
+    let time = 0;
+    let subContent = "console.log(0)";
+
+    const { collectRequests } = await startTest(1, (app) => {
+      app.get("/index.html", (req, res) => {
+        res
+          .status(200)
+          .end(
+            `<script type='module' src='/main.js'></script> script module src ${snippet()}`
+          );
+      });
+
+      app.get("/main.js", (req, res) => {
+        res.status(200).end("import('/sub.js')");
+      });
+
+      ["get", "head"].forEach((method) => {
+        app[method]("/sub.js", (req, res) => {
+          res
+            .status(200)
+            .header(...lastModifiedHeader(time))
+            .end(method === "get" ? subContent : undefined);
+        });
+      });
     });
-    await t.loaded;
 
     await delay(200);
+    time = 1;
+    subContent = "console.log(1)";
 
-    t.updateFiles({
-      "/sub.js": {
-        content: "console.log(1)",
-        lastModified: new Date(Date.UTC(2000, 0, 1, 0, 1)),
-      },
-    });
-
+    const requests = await collectRequests();
     assert(
-      (await t.result).requests.filter(
-        (req) => req.method === "GET" && req.url === "/index.html"
+      requests.filter(
+        (req) =>
+          req.method === "GET" &&
+          req.destination === "document" &&
+          req.url === "/index.html"
       ).length === 2
     );
   });
 
   test("reloads page when HEAD is 405 Method Not Allowed", async () => {
-    function noHead(req, res, next) {
-      if (req.method === "HEAD") {
-        res.status(405).end();
-      } else {
-        next();
-      }
-    }
+    let time = 0;
+    let content = `foo ${snippet()}`;
 
-    try {
-      app.use(noHead);
-
-      const t = startTest({
-        files: {
-          "/index.html": {
-            content: `foo ${snippet()}`,
-            lastModified: new Date(Date.UTC(2000, 0, 1, 0, 0)),
-          },
-        },
-      });
-      await t.loaded;
-
-      await delay(200);
-
-      t.updateFiles({
-        "/index.html": {
-          content: `bar ${snippet()}`,
-          lastModified: new Date(Date.UTC(2000, 0, 1, 0, 1)),
-        },
+    const { collectRequests, app } = await startTest(1, (app) => {
+      app.use(function noHead(req, res, next) {
+        if (req.method === "HEAD") {
+          res.status(405).end();
+        } else {
+          next();
+        }
       });
 
-      assert(
-        (await t.result).requests.filter(
-          (req) =>
-            req.method === "GET" &&
-            req.secFetchDest === "document" &&
-            req.url === "/index.html"
-        ).length === 2
-      );
-    } finally {
-      app.router.stack.splice(
-        app.router.stack.findIndex((layer) => layer.name === noHead.name),
-        1
-      );
-    }
+      app.get("/index.html", (req, res) => {
+        res
+          .status(200)
+          .header(...lastModifiedHeader(time))
+          .end(content);
+      });
+    });
+
+    await delay(200);
+    content = `bar ${snippet()}`;
+    time = 1;
+
+    const requests = await collectRequests();
+    assert(
+      requests.filter(
+        (req) =>
+          req.method === "GET" &&
+          req.destination === "document" &&
+          req.url === "/index.html"
+      ).length === 2
+    );
   });
 
   const success = await report();
   process.exitCode = success ? 0 : 1;
-  if (success) chromium.kill();
-  server.close();
-  server.closeAllConnections();
+  return success;
 });
 
+function lastModifiedHeader(time) {
+  return [
+    "Last-Modified",
+    new Date(Date.UTC(2000, 0, 1, 0, 0, time)).toUTCString(),
+  ];
+}
+
 function snippet({ interval = 100 } = {}) {
-  return `<script async src='/script.js' data-interval='${interval}'>`;
+  return `<script async src='/script.js' data-interval='${interval}' data-debug></script>`;
 }
 
 function delay(ms) {

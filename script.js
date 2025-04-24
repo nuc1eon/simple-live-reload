@@ -9,17 +9,13 @@ Software.
 WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
 COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
 OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.*/
-(() => {
-  if (
-    location.hostname !== "localhost" &&
-    location.hostname !== "127.0.0.1" &&
-    location.hostname !== "[::1]"
-  ) {
-    return;
-  }
-
+if (
+  location.hostname === "localhost" ||
+  location.hostname === "127.0.0.1" ||
+  location.hostname === "[::1]"
+) {
   const interval = Number(document.currentScript?.dataset.interval || 1000);
-  const debug = Boolean(document.currentScript?.dataset.debug || false);
+  const debug = document.currentScript?.hasAttribute("data-debug") || false;
 
   let watching = new Set();
   watch(location.href);
@@ -76,4 +72,4 @@ OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
     check();
     setInterval(check, interval);
   }
-})();
+}

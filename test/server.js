@@ -25,7 +25,7 @@ module.exports.createTestServer = function createTestServer() {
 
   let test = null;
 
-  function startTest({ timeoutMs = 400, files = {} }) {
+  function startTest({ timeoutMs = 1000, files = {} }) {
     resetRestRoute();
 
     test = { timeoutMs, files, requests: [] };
@@ -88,6 +88,7 @@ module.exports.createTestServer = function createTestServer() {
       test?.requests.push({
         method: req.method,
         url: req.url,
+        secFetchDest: req.header("sec-fetch-dest"),
         time: time,
         relTime: test.requests.length ? time - test.requests[0].time : 0,
       });

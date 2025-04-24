@@ -234,6 +234,53 @@ const server = app.listen(8080, async () => {
     );
   });
 
+  test("reloads page when HEAD is 405 Method Not Allowed", async () => {
+    function noHead(req, res, next) {
+      if (req.method === "HEAD") {
+        res.status(405).end();
+      } else {
+        next();
+      }
+    }
+
+    try {
+      app.use(noHead);
+
+      const t = startTest({
+        files: {
+          "/index.html": {
+            content: `foo ${snippet()}`,
+            lastModified: new Date(Date.UTC(2000, 0, 1, 0, 0)),
+          },
+        },
+      });
+      await t.loaded;
+
+      await delay(200);
+
+      t.updateFiles({
+        "/index.html": {
+          content: `bar ${snippet()}`,
+          lastModified: new Date(Date.UTC(2000, 0, 1, 0, 1)),
+        },
+      });
+
+      assert(
+        (await t.result).requests.filter(
+          (req) =>
+            req.method === "GET" &&
+            req.secFetchDest === "document" &&
+            req.url === "/index.html"
+        ).length === 2
+      );
+    } finally {
+      app.router.stack.splice(
+        app.router.stack.findIndex((layer) => layer.name === noHead.name),
+        1
+      );
+    }
+  });
+
   const success = await report();
   process.exitCode = success ? 0 : 1;
   if (success) chromium.kill();

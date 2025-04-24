@@ -43,9 +43,18 @@ OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
     }
 
     let lastModified, etag;
+    let method = "head";
 
     async function check() {
-      const res = await fetch(url, { method: "head" });
+      const res = await fetch(url, { method });
+      if (
+        res.status === /*Method Not Allowed*/ 405 ||
+        res.status === /*Not Implemented*/ 501
+      ) {
+        method = "get";
+        return check();
+      }
+
       const newLastModified = res.headers.get("Last-Modified");
       const newETag = res.headers.get("ETag");
 
@@ -64,6 +73,7 @@ OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
       etag = newETag;
     }
 
+    check();
     setInterval(check, interval);
   }
 })();

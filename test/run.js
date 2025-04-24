@@ -13,9 +13,9 @@ const server = app.listen(8080, async () => {
     [`--user-data-dir=${chromiumUserDir}`, "http://localhost:8080/start"],
     { shell: true }
   );
-  await delay(1000);
+  await delay(3000); // allow me to open devtools
 
-  await test("reloads page when HTML is updated", async () => {
+  test("reloads page when HTML is updated", async () => {
     const t = startTest({
       files: {
         "/index.html": {
@@ -42,7 +42,7 @@ const server = app.listen(8080, async () => {
     );
   });
 
-  await test("reloads page at the specified frequency", async () => {
+  test("reloads page at the specified frequency", async () => {
     const t = startTest({
       timeoutMs: 3100,
       files: {
@@ -72,7 +72,7 @@ const server = app.listen(8080, async () => {
     );
   });
 
-  await test("reloads page when page is updated more than once", async () => {
+  test("reloads page when page is updated more than once", async () => {
     const t = startTest({
       files: {
         "/index.html": {
@@ -108,7 +108,7 @@ const server = app.listen(8080, async () => {
     );
   });
 
-  await test("reloads page when a CSS resource is updated", async () => {
+  test("reloads page when a CSS resource is updated", async () => {
     const t = startTest({
       files: {
         "/index.html": {
@@ -138,7 +138,7 @@ const server = app.listen(8080, async () => {
     );
   });
 
-  await test("reloads page when a CSS background-image is updated", async () => {
+  test("reloads page when a CSS background-image is updated", async () => {
     const t = startTest({
       files: {
         "/index.html": {
@@ -171,7 +171,7 @@ const server = app.listen(8080, async () => {
     );
   });
 
-  await test("reloads page when a JS resource is updated", async () => {
+  test("reloads page when a JS resource is updated", async () => {
     const t = startTest({
       files: {
         "/index.html": {
@@ -201,7 +201,7 @@ const server = app.listen(8080, async () => {
     );
   });
 
-  await test("reloads page when a JS sub-import is updated", async () => {
+  test("reloads page when a JS sub-import is updated", async () => {
     const t = startTest({
       files: {
         "/index.html": {
@@ -234,8 +234,9 @@ const server = app.listen(8080, async () => {
     );
   });
 
-  process.exitCode = report() ? 0 : 1;
-  // chromium.kill();
+  const success = await report();
+  process.exitCode = success ? 0 : 1;
+  if (success) chromium.kill();
   server.close();
   server.closeAllConnections();
 });

@@ -44,7 +44,6 @@ if (
     async function check() {
       const res = await fetch(url, request);
       if (
-        request.method !== "get" ||
         res.status === /*Method Not Allowed*/ 405 ||
         res.status === /*Not Implemented*/ 501
       ) {

@@ -26,6 +26,7 @@ module.exports.createTest = function createTest() {
 
   async function report() {
     for (const [name, func] of testQueue) {
+      console.log("running:", name);
       try {
         currentTestName = name;
         await func();

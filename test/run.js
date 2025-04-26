@@ -12,7 +12,7 @@ withClientServer(async () => {
 
     const { collectRequests } = await startTest(1, (app) => {
       ["get", "head"].forEach((method) => {
-        app[method]("/index.html", (req, res) => {
+        app[method]("/", (req, res) => {
           res
             .status(200)
             .header(...lastModifiedHeader(time))
@@ -31,7 +31,7 @@ withClientServer(async () => {
         (req) =>
           req.method === "GET" &&
           req.mode === "navigate" &&
-          req.url === "/index.html"
+          req.url === "/"
       ).length === 2
     );
   });
@@ -42,7 +42,7 @@ withClientServer(async () => {
 
     const { collectRequests } = await startTest(5, (app) => {
       ["get", "head"].forEach((method) => {
-        app[method]("/index.html", (req, res) => {
+        app[method]("/", (req, res) => {
           res
             .status(200)
             .header(...lastModifiedHeader(time))
@@ -63,7 +63,7 @@ withClientServer(async () => {
         (req) =>
           req.method === "GET" &&
           req.mode === "navigate" &&
-          req.url === "/index.html"
+          req.url === "/"
       ).length === 2
     );
   });
@@ -74,7 +74,7 @@ withClientServer(async () => {
 
     const { collectRequests } = await startTest(1, (app) => {
       ["get", "head"].forEach((method) => {
-        app[method]("/index.html", (req, res) => {
+        app[method]("/", (req, res) => {
           res
             .status(200)
             .header(...lastModifiedHeader(time))
@@ -97,7 +97,7 @@ withClientServer(async () => {
         (req) =>
           req.method === "GET" &&
           req.mode === "navigate" &&
-          req.url === "/index.html"
+          req.url === "/"
       ).length === 3
     );
   });
@@ -107,7 +107,7 @@ withClientServer(async () => {
     let cssContent = "* { color: red }";
 
     const { collectRequests } = await startTest(1, (app) => {
-      app.get("/index.html", (req, res) => {
+      app.get("/", (req, res) => {
         res
           .status(200)
           .end(`<link rel='stylesheet' href='/css.css'> css ${snippet()}`);
@@ -133,7 +133,7 @@ withClientServer(async () => {
         (req) =>
           req.method === "GET" &&
           req.mode === "navigate" &&
-          req.url === "/index.html"
+          req.url === "/"
       ).length === 2
     );
   });
@@ -143,7 +143,7 @@ withClientServer(async () => {
     let imageContent = fixtures.yellowBMP;
 
     const { collectRequests } = await startTest(1, (app) => {
-      app.get("/index.html", (req, res) => {
+      app.get("/", (req, res) => {
         res
           .status(200)
           .end(
@@ -175,7 +175,7 @@ withClientServer(async () => {
         (req) =>
           req.method === "GET" &&
           req.mode === "navigate" &&
-          req.url === "/index.html"
+          req.url === "/"
       ).length === 2
     );
   });
@@ -185,7 +185,7 @@ withClientServer(async () => {
     let jsContent = "console.log(0)";
 
     const { collectRequests } = await startTest(1, (app) => {
-      app.get("/index.html", (req, res) => {
+      app.get("/", (req, res) => {
         res
           .status(200)
           .end(`<script async src='/js.js'></script> script src ${snippet()}`);
@@ -211,7 +211,7 @@ withClientServer(async () => {
         (req) =>
           req.method === "GET" &&
           req.mode === "navigate" &&
-          req.url === "/index.html"
+          req.url === "/"
       ).length === 2
     );
   });
@@ -221,7 +221,7 @@ withClientServer(async () => {
     let subContent = "console.log(0)";
 
     const { collectRequests } = await startTest(1, (app) => {
-      app.get("/index.html", (req, res) => {
+      app.get("/", (req, res) => {
         res
           .status(200)
           .end(
@@ -253,7 +253,7 @@ withClientServer(async () => {
         (req) =>
           req.method === "GET" &&
           req.mode === "navigate" &&
-          req.url === "/index.html"
+          req.url === "/"
       ).length === 2
     );
   });
@@ -271,7 +271,7 @@ withClientServer(async () => {
         }
       });
 
-      app.get("/index.html", (req, res) => {
+      app.get("/", (req, res) => {
         res
           .status(200)
           .header(...lastModifiedHeader(time))
@@ -289,7 +289,7 @@ withClientServer(async () => {
         (req) =>
           req.method === "GET" &&
           req.mode === "navigate" &&
-          req.url === "/index.html"
+          req.url === "/"
       ).length === 2
     );
   });

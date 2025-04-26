@@ -14,26 +14,34 @@ const contentTypes = {
 module.exports.createTestServer = function createTestServer() {
   const app = express();
 
-  const runnerContent = '<iframe src="/index.html"></iframe><button autofocus style="opacity:0"></button>';
-
+  const runnerContent =
+    '<iframe src="/START" onload="this.contentWindow.location.pathname===`/END`&&location.reload()"></iframe><button autofocus style="opacity:0"></button>';
   const idleContent =
-    '<i>test server idle</i><meta http-equiv="refresh" content="1;url=/index.html">';
+    '<i>test server idle</i><meta http-equiv="refresh" content="1;url=/">';
 
-  addBaseRoutes(app, () => {});
-  addFinalRoute(app, () => {});
+  resetRoutes();
 
+  function resetRoutes() {
+    app.router.stack.length = 0;
+    addBaseRoutes(app);
+    addFinalRoute(app);
+  }
+
+  let testCounter = 0;
   async function startTest(timeoutSec, callback) {
+    const testID = `<${testCounter++}>`;
     app.router.stack.length = 0;
 
     const { requests, requestLogger } = createRequestLogger();
     app.use(requestLogger);
 
     const start = promiseWithResolvers();
+    const load = promiseWithResolvers();
     const end = promiseWithResolvers();
 
-    app.use(createTestWrapper(timeoutSec, start.resolve));
+    app.use(createTestWrapper(timeoutSec, load.resolve));
 
-    addBaseRoutes(app, end.resolve);
+    addBaseRoutes(app, start.resolve, end.resolve);
     callback(app); // test logic is like a big middleware
     addFinalRoute(app);
 
@@ -42,18 +50,25 @@ module.exports.createTestServer = function createTestServer() {
       return requests;
     };
 
-    await start.promise;
+    await load.promise;
     return { collectRequests };
   }
 
-  function addBaseRoutes(app, onEnd) {
-    app.get("/run", (req, res) => {
+  function addBaseRoutes(app, onStart, onEnd) {
+    app.get("/RUN", (req, res) => {
       res.status(200).header("Content-Type", "text/html").end(runnerContent);
-      onEnd();
     });
-    app.get("/end", (req, res) => {
+    app.get("/START", (req, res) => {
       res.status(200).header("Content-Type", "text/html").end(idleContent);
-      onEnd();
+      onStart?.();
+    });
+    app.get("/END", (req, res) => {
+      resetRoutes();
+      res
+        .status(200)
+        .header("Content-Type", "text/html")
+        .end("<i>test ended</i>");
+      onEnd?.();
     });
     app.get("/script.js", (req, res) => {
       res.sendFile(path.join(__dirname, "../../script.js"));
@@ -62,7 +77,7 @@ module.exports.createTestServer = function createTestServer() {
 
   function addFinalRoute(app) {
     app.all("*_", (req, res) => {
-      if (req.url !== "/index.html") {
+      if (req.url !== "/") {
         res.status(404).end();
         return;
       }
@@ -70,17 +85,17 @@ module.exports.createTestServer = function createTestServer() {
     });
   }
 
-  function createTestWrapper(timeoutSec, onStart) {
+  function createTestWrapper(timeoutSec, onLoad) {
     return (req, res, next) => {
       res.header("Cache-Control", "no-store, no-cache");
       res.header(
         "Content-Type",
-        contentTypes[path.extname(req.url)] ?? "text/plain"
+        contentTypes[path.extname(req.url)] ?? "text/html"
       );
 
-      if (req.method === "GET" && req.url === "/index.html") {
-        res.header("Refresh", `${timeoutSec}, url=/end`);
-        onStart();
+      if (req.method === "GET" && req.url === "/") {
+        res.header("Refresh", `${timeoutSec}, url=/END`);
+        onLoad();
       }
 
       next();
@@ -111,7 +126,11 @@ module.exports.createTestServer = function createTestServer() {
       const chromiumUserDir = await mkdtemp("/tmp/slrtest");
       const chromium = spawn(
         "chromium",
-        [`--user-data-dir=${chromiumUserDir}`, "http://localhost:8080/run"],
+        [
+          `--user-data-dir=${chromiumUserDir}`,
+          "--disable-popup-blocking",
+          "http://localhost:8080/RUN",
+        ],
         { shell: true }
       );
       await delay(3000); // wait for browser program to open

@@ -38,11 +38,17 @@ if (
       console.log("[simple-live-reload] watching", url.href);
     }
 
+    let focused = false;
     let etag, lastModified, contentLength;
     let request = { method: "head", cache: "no-store" };
 
     async function check() {
-      if (document.hidden) return;
+      try {
+        if (document.hidden) return;
+        if (focused) return;
+      } finally {
+        focused = document.hasFocus();
+      }
 
       const res = await fetch(url, request);
       if (res.status === 405 || res.status === 501) {

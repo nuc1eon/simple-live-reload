@@ -258,6 +258,69 @@ withClientServer(async () => {
     );
   });
 
+  test("doesn't reload page when hidden", async () => {
+    let time = 0;
+    let indexHTML = `foo <script>setTimeout(()=>open("/popup.html","_blank"),50)</script> ${snippet()}`;
+
+    const { collectRequests } = await startTest(1, (app) => {
+      app.get("/popup.html", (req, res) => {
+        res.status(200).end("<script>setTimeout(close,950)</script>");
+      });
+      ["get", "head"].forEach((method) => {
+        app[method]("/", (req, res) => {
+          res
+            .status(200)
+            .header(...lastModifiedHeader(time))
+            .end(method === "get" ? indexHTML : undefined);
+        });
+      });
+    });
+
+    await delay(200);
+    time = 1;
+    indexHTML = `bar ${snippet()}`;
+
+    const requests = await collectRequests();
+    assert(
+      requests.filter(
+        (req) =>
+          req.method === "GET" &&
+          req.mode === "navigate" &&
+          req.url === "/"
+      ).length === 1
+    );
+  });
+
+  test("doesn't reload page when focused", async () => {
+    let time = 0;
+    let indexHTML = `<input autofocus><script>document.querySelector("input").focus()</script> ${snippet()}`;
+
+    const { collectRequests } = await startTest(1, (app) => {
+      ["get", "head"].forEach((method) => {
+        app[method]("/", (req, res) => {
+          res
+            .status(200)
+            .header(...lastModifiedHeader(time))
+            .end(method === "get" ? indexHTML : undefined);
+        });
+      });
+    });
+
+    await delay(200);
+    time = 1;
+    indexHTML = `bar ${snippet()}`;
+
+    const requests = await collectRequests();
+    assert(
+      requests.filter(
+        (req) =>
+          req.method === "GET" &&
+          req.mode === "navigate" &&
+          req.url === "/"
+      ).length === 1
+    );
+  });
+
   test("reloads page when HEAD is 405 Method Not Allowed", async () => {
     let time = 0;
     let content = `foo ${snippet()}`;

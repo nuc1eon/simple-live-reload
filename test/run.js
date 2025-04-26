@@ -30,7 +30,7 @@ withClientServer(async () => {
       requests.filter(
         (req) =>
           req.method === "GET" &&
-          req.destination === "document" &&
+          req.mode === "navigate" &&
           req.url === "/index.html"
       ).length === 2
     );
@@ -62,7 +62,7 @@ withClientServer(async () => {
       requests.filter(
         (req) =>
           req.method === "GET" &&
-          req.destination === "document" &&
+          req.mode === "navigate" &&
           req.url === "/index.html"
       ).length === 2
     );
@@ -96,7 +96,7 @@ withClientServer(async () => {
       requests.filter(
         (req) =>
           req.method === "GET" &&
-          req.destination === "document" &&
+          req.mode === "navigate" &&
           req.url === "/index.html"
       ).length === 3
     );
@@ -132,7 +132,7 @@ withClientServer(async () => {
       requests.filter(
         (req) =>
           req.method === "GET" &&
-          req.destination === "document" &&
+          req.mode === "navigate" &&
           req.url === "/index.html"
       ).length === 2
     );
@@ -174,7 +174,7 @@ withClientServer(async () => {
       requests.filter(
         (req) =>
           req.method === "GET" &&
-          req.destination === "document" &&
+          req.mode === "navigate" &&
           req.url === "/index.html"
       ).length === 2
     );
@@ -210,7 +210,7 @@ withClientServer(async () => {
       requests.filter(
         (req) =>
           req.method === "GET" &&
-          req.destination === "document" &&
+          req.mode === "navigate" &&
           req.url === "/index.html"
       ).length === 2
     );
@@ -252,7 +252,7 @@ withClientServer(async () => {
       requests.filter(
         (req) =>
           req.method === "GET" &&
-          req.destination === "document" &&
+          req.mode === "navigate" &&
           req.url === "/index.html"
       ).length === 2
     );
@@ -288,7 +288,7 @@ withClientServer(async () => {
       requests.filter(
         (req) =>
           req.method === "GET" &&
-          req.destination === "document" &&
+          req.mode === "navigate" &&
           req.url === "/index.html"
       ).length === 2
     );

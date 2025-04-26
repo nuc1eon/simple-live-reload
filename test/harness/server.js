@@ -14,6 +14,8 @@ const contentTypes = {
 module.exports.createTestServer = function createTestServer() {
   const app = express();
 
+  const runnerContent = '<iframe src="/index.html"></iframe><button autofocus style="opacity:0"></button>';
+
   const idleContent =
     '<i>test server idle</i><meta http-equiv="refresh" content="1;url=/index.html">';
 
@@ -45,6 +47,10 @@ module.exports.createTestServer = function createTestServer() {
   }
 
   function addBaseRoutes(app, onEnd) {
+    app.get("/run", (req, res) => {
+      res.status(200).header("Content-Type", "text/html").end(runnerContent);
+      onEnd();
+    });
     app.get("/end", (req, res) => {
       res.status(200).header("Content-Type", "text/html").end(idleContent);
       onEnd();
@@ -86,10 +92,11 @@ module.exports.createTestServer = function createTestServer() {
 
     function requestLogger(req, res, next) {
       const time = Date.now();
+      const mode = req.header("sec-fetch-mode");
       requests.push({
         method: req.method,
         url: req.url,
-        destination: req.header("sec-fetch-dest"),
+        mode,
         time: time,
         relTime: requests.length ? time - requests[0].time : 0,
       });
@@ -104,10 +111,7 @@ module.exports.createTestServer = function createTestServer() {
       const chromiumUserDir = await mkdtemp("/tmp/slrtest");
       const chromium = spawn(
         "chromium",
-        [
-          `--user-data-dir=${chromiumUserDir}`,
-          "http://localhost:8080/index.html",
-        ],
+        [`--user-data-dir=${chromiumUserDir}`, "http://localhost:8080/run"],
         { shell: true }
       );
       await delay(3000); // wait for browser program to open

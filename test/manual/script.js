@@ -1,0 +1,1 @@
+/home/lean/Projects/simple-live-reload/script.js

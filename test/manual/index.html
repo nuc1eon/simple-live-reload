@@ -1,0 +1,10 @@
+<!doctype html>
+<script async src="script.js" data-debug></script>
+<script>
+  const lastLoad = sessionStorage.getItem('lastLoad');
+  if (lastLoad) {
+    alert('Page reloaded!');
+    document.documentElement.style.backgroundColor = '#' + (Date.now() % 0xffffff).toString(16);
+  }
+  sessionStorage.setItem('lastLoad', Date.now());
+</script>
